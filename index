@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="kn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELECTION ENGINE v16 - VIEWER</title>
+    <link href="https://fonts.googleapis.com/css2?family=Anek+Kannada:wght@400;600;700;800&family=Bebas+Neue&family=Rajdhani:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        :root {
+            --bg: #040812; --bg2: #070f22; --gold: #f5c842; --gold2: #ffaa00; --red: #c0392b; --red2: #e74c3c;
+            --blue: #1a56db; --cyan: #00d4ff; --green: #00c853; --silver: #94a3b8;
+            --font-kn: 'Anek Kannada', sans-serif; --font-en: 'Bebas Neue', cursive; --font-ui: 'Rajdhani', sans-serif;
+            --glow-gold: 0 0 20px rgba(245,200,66,0.6);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; display: flex; font-family: var(--font-kn); color: #fff; }
+
+        .canvas-wrapper { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; position: relative; }
+        .canvas { width: 1920px; height: 1080px; position: absolute; transform-origin: center center; background: #040812 radial-gradient(ellipse at 50% 50%, #0d1f3c 0%, var(--bg) 80%); display: flex; flex-direction: column; overflow: hidden; z-index: 1; }
+        .canvas::after { content: ''; position: absolute; inset: 0; z-index: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.15) 2px, rgba(0,0,0,0.15) 4px); pointer-events: none; }
+
+        .header { height: 110px; flex-shrink: 0; background: linear-gradient(90deg, transparent 0%, rgba(21,21,48,0.8) 50%, transparent 100%); display: flex; justify-content: space-between; align-items: center; padding: 0 80px; z-index: 10; margin-top: 20px; }
+        .header-left h1 { font-family: var(--font-en); font-size: 70px; color: #fff; letter-spacing: 4px; line-height: 1; text-shadow: 3px 3px 10px rgba(0,0,0,0.8); }
+        .header-left h2 { font-family: var(--font-ui); font-size: 26px; color: var(--gold); letter-spacing: 6px; margin-top: 4px; }
+        .state-badge { background: linear-gradient(135deg, var(--gold), var(--gold2)); color: #000; padding: 12px 60px; border-radius: 12px; font-size: 55px; font-weight: 800; box-shadow: var(--glow-gold); line-height: 1; transform: skewX(-10deg); }
+        .state-badge span { display: block; transform: skewX(10deg); }
+
+        .stage-wrapper { flex: 1; position: relative; padding: 10px 60px 20px; display: flex; flex-direction: column; overflow: hidden; z-index: 1; min-height: 0; }
+        .slide { width: 100%; height: 100%; display: none; opacity: 0; flex-direction: column; min-height: 0; }
+        .slide.active { display: flex; opacity: 1; animation: revealSlide 0.6s forwards; }
+        @keyframes revealSlide { 0%{opacity:0; transform:scale(0.97);} 100%{opacity:1; transform:scale(1);} }
+        .slide-title { font-family: var(--font-en); font-size: 60px; color: var(--gold); letter-spacing: 5px; text-align: center; margin-bottom: 15px; text-shadow: 0 5px 15px rgba(0,0,0,0.8); }
+
+        .brand-bottom-bar { height: 50px; background: rgba(0,0,0,0.95); border-top: 3px solid var(--cyan); display: flex; justify-content: space-between; align-items: center; padding: 0 40px; z-index: 50; }
+        .foot-hash { font-family: var(--font-en); font-size: 30px; color: var(--gold); letter-spacing: 2px; }
+        .foot-center { font-family: var(--font-ui); color: rgba(255,255,255,0.3); font-size: 16px; font-weight: bold; letter-spacing: 4px; }
+        .foot-web { font-family: var(--font-ui); font-size: 24px; color: var(--cyan); font-weight: bold; letter-spacing: 4px; }
+
+        .map-img-element { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 0 25px rgba(0,212,255,0.5)); padding: 15px; }
+
+        /* SLIDE 1 & 2: RESULTS */
+        .slide-results { flex-direction: row !important; gap: 40px; align-items: stretch; }
+        .results-map-col { width: 25%; display: flex; flex-direction: column; z-index: 2; }
+        .map-frame { flex: 1; background: rgba(0,0,0,0.6); border: 3px solid rgba(0,212,255,0.4); border-radius: 16px; overflow: hidden; display: flex; justify-content: center; align-items: center; min-height: 0; }
+        .creative-totals { display: flex; gap: 15px; height: 100px; flex-shrink: 0; margin-bottom: 20px; }
+        .tech-box { flex: 1; background: linear-gradient(180deg, rgba(20,30,50,0.9), rgba(5,10,20,0.9)); border: 2px solid var(--cyan); border-radius: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .tech-box.maj { border-color: var(--gold); }
+        .tech-label { font-family: var(--font-ui); font-size: 18px; color: var(--silver); letter-spacing: 4px; }
+        .tech-val { font-family: var(--font-en); font-size: 60px; color: #fff; line-height: 1; }
+        .tech-box.maj .tech-val { color: var(--gold); }
+        .results-cards-col { flex: 1; display: flex; gap: 20px; align-items: stretch; justify-content: center; min-height: 0; }
+        .result-card { flex: 1; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; border: 4px solid; background: linear-gradient(180deg, #111, #000); }
+        .rc-head { padding: 12px; text-align: center; font-size: 36px; font-weight: 800; color: #fff; border-bottom: 2px solid rgba(255,255,255,0.2); }
+        .rc-img-box { flex: 1; display: flex; align-items: flex-end; justify-content: center; position: relative; min-height: 0; }
+        .rc-img-box img { height: 100%; max-width: 100%; object-fit: contain; object-position: bottom; }
+        .rc-num-wrap { padding: 15px; background: rgba(0,0,0,0.9); text-align: center; border-top: 2px solid rgba(255,255,255,0.1); }
+        .rc-num { font-family: var(--font-en); font-size: 170px; color: #fff; line-height: 1.0; }
+
+        /* EXIT POLL */
+        #slide-exitpoll { justify-content: center; padding: 20px 80px; }
+        .ep-table { width: 100%; border-collapse: separate; border-spacing: 0 10px; }
+        .ep-table th { background: rgba(0,212,255,0.1); color: var(--cyan); padding: 20px; font-size: 28px; text-transform: uppercase; border-top: 2px solid var(--cyan); border-bottom: 2px solid var(--cyan); }
+        .ep-table td { padding: 15px 20px; background: rgba(20,30,50,0.6); font-family: var(--font-en); font-size: 50px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .ep-table tr.poll-of-polls td { background: rgba(245,200,66,0.2); border-top: 2px solid var(--gold); border-bottom: 2px solid var(--gold); font-size: 65px; color: var(--gold); text-shadow: 0 0 10px rgba(245,200,66,0.5); }
+        .ep-table .agency-col { font-family: var(--font-kn); font-size: 30px; font-weight: bold; text-align: left; color: #fff; }
+
+        /* VOTE SHARE */
+        #slide-voteshare { padding: 20px; flex-direction: column; align-items: center; justify-content: center; gap: 30px; }
+        .vs-html-container { display: flex; align-items: flex-end; justify-content: center; gap: 50px; height: 600px; width: 90%; background: rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 40px; }
+        .vs-col { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 15px; position: relative; }
+        .vs-bar { width: 100%; max-width: 180px; border-radius: 15px 15px 0 0; position: relative; display: flex; flex-direction: column; align-items: center; transition: height 1.5s; box-shadow: 0 10px 30px rgba(0,0,0,0.8); border: 3px solid rgba(255,255,255,0.2); border-bottom: none; }
+        .vs-sq-img { width: 90%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; border: 3px solid #fff; position: absolute; top: 15px; box-shadow: 0 10px 20px #000; }
+        .vs-num { position: absolute; bottom: 20px; font-family: var(--font-en); font-size: 80px; color: #fff; text-shadow: 0 5px 15px #000; line-height: 1; }
+        .vs-lbl { font-size: 32px; font-weight: 800; color: #fff; text-align: center; }
+
+        /* POWER MAP & HISTORY */
+        #slide-powermap { flex-direction: row !important; align-items: stretch; gap: 0; }
+        .pm-side { flex: 1; display: flex; flex-direction: column; padding: 20px; gap: 20px; justify-content: center; position: relative; }
+        .pm-map-box { flex: 1; background: rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.1); border-radius: 20px; display: flex; justify-content: center; align-items: center; overflow: hidden; min-height: 0; }
+        .pm-year-badge { font-family: var(--font-en); font-size: 50px; text-align: center; background: rgba(0,0,0,0.8); border-radius: 12px; padding: 5px; border: 2px solid; }
+        .pm-center-console { width: 500px; background: rgba(0,0,0,0.95); border-left: 4px solid var(--cyan); border-right: 4px solid var(--cyan); z-index: 10; display: flex; flex-direction: column; padding: 40px 15px 15px; gap: 15px; position: relative; }
+        .pm-center-console::before { content: 'SWING COMPARISON'; position: absolute; top: 0; left: 0; width: 100%; text-align: center; font-family: var(--font-en); font-size: 24px; color: var(--cyan); background: #000; padding: 5px 0; border-bottom: 2px solid var(--cyan); }
+        .pm-swing-card { background: #111; border-radius: 12px; padding: 12px; border: 2px solid; display: flex; flex-direction: column; align-items: center; }
+        
+        #slide-history { position: relative; display: flex; justify-content: center; align-items: center; }
+        .hist-map-wrap { width: 80%; height: 90%; position: relative; z-index: 2; display: flex; justify-content: center; }
+        .hist-glass-overlay { position: absolute; bottom: 30px; left: 30px; z-index: 10; width: 350px; background: rgba(10,15,30,0.9); backdrop-filter: blur(10px); border: 2px solid rgba(255,255,255,0.15); border-radius: 15px; padding: 20px; border-top: 6px solid var(--cyan); }
+        .hist-list-item { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 8px; border-left: 5px solid; margin-bottom: 10px;}
+
+        /* HEMICIRCLE */
+        #slide-hemi { flex-direction: row; gap: 40px; align-items: center; justify-content: center; padding: 20px; }
+        .hemi-canvas-box { flex: 1.5; display: flex; justify-content: center; align-items: flex-end; position: relative; height: 100%; min-height: 500px; }
+        .hemi-center-text { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); text-align: center; }
+        .hc-title { font-family: var(--font-ui); font-size: 28px; color: var(--gold); letter-spacing: 4px; background: rgba(0,0,0,0.8); padding: 5px 20px; border-radius: 10px; border: 2px solid var(--gold); }
+        .hc-num { font-family: var(--font-en); font-size: 150px; color: #fff; line-height: 1; }
+        .hemi-leaders-col { flex: 1; display: flex; flex-direction: column; gap: 20px; border-left: 3px solid rgba(255,255,255,0.1); padding-left: 50px; }
+        .hemi-leader-row { display: flex; align-items: center; gap: 25px; background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); padding: 15px; border-radius: 15px; }
+        .hemi-leader-row img { width: 120px; height: 120px; border-radius: 50%; border: 4px solid; object-fit: cover; }
+        .hemi-leader-name { font-size: 36px; font-weight: 800; color: #fff; line-height: 1; margin-bottom: 5px;}
+        .hemi-leader-num { font-family: var(--font-en); font-size: 60px; font-weight: 800; color: #fff; line-height: 1; }
+
+        /* RACE TALLY */
+        #slide-race { justify-content: center; padding: 20px 80px; }
+        .race-track-container { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 35px; position: relative; min-height: 0; padding: 40px 0; }
+        .global-race-maj { position: absolute; top: 0; bottom: 0; width: 4px; background: var(--gold); z-index: 0; box-shadow: var(--glow-gold); }
+        .grm-lbl { position: absolute; top: -35px; left: -45px; background: var(--gold); color: #000; font-family: var(--font-ui); font-size: 18px; font-weight: bold; padding: 5px 15px; border-radius: 5px; }
+        .race-row { display: flex; align-items: center; gap: 25px; position: relative; z-index: 2; }
+        .race-label { width: 250px; font-size: 42px; font-weight: 800; text-align: right; }
+        .race-bar-bg { flex: 1; height: 100px; background: rgba(255,255,255,0.05); border-radius: 40px; position: relative; border: 2px solid rgba(255,255,255,0.1); }
+        .race-bar-fill { height: 100%; border-radius: 40px; position: absolute; left: 0; top: 0; transition: width 1s cubic-bezier(0.25, 0.1, 0.25, 1); display: flex; align-items: center; justify-content: flex-end; min-width: 90px; }
+        .race-img { width: 140px; height: 140px; border-radius: 50%; border: 6px solid #fff; position: absolute; right: -70px; top: -32px; object-fit: cover; z-index: 5; box-shadow: 0 10px 20px rgba(0,0,0,0.8);}
+        .race-number { position: absolute; right: 80px; color: #fff; font-family: var(--font-en); font-size: 56px; z-index: 4; }
+
+        /* MEGA SUMMARY */
+        #slide-megasummary { flex-direction: row; gap: 20px; align-items: stretch; padding: 0; }
+        .mega-col { display: flex; flex-direction: column; gap: 20px; flex: 1; min-height: 0; }
+        .mega-card { background: rgba(10,15,30,0.8); border: 2px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 15px; display: flex; flex-direction: column; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.7); min-height: 0; overflow: hidden; }
+        .mega-title { font-family: var(--font-ui); font-size: 22px; color: var(--cyan); letter-spacing: 3px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; margin-bottom: 10px; font-weight: bold; text-align: center; }
+        .mega-winner-box { background: linear-gradient(135deg, rgba(245,200,66,0.3), rgba(0,0,0,0.8)); border: 3px solid var(--gold); border-radius: 15px; padding: 10px 20px; display: flex; align-items: center; gap: 25px; box-shadow: var(--glow-gold); height: 250px; }
+        .mwb-img { width: 180px; height: 100%; object-fit: contain; object-position: bottom; }
+        .mwb-data { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        .mwb-title { font-family: var(--font-ui); color: var(--gold); font-size: 30px; letter-spacing: 4px; margin-bottom: 15px; }
+        .mwb-party { font-size: 60px; font-weight: 800; color: #fff; line-height: 1.1; margin-bottom: 5px; }
+        .mwb-seats { font-family: var(--font-en); font-size: 100px; color: var(--gold); line-height: 0.9; }
+        .mega-pc-row { display: flex; gap: 15px; flex: 1; }
+        .mega-pc { flex: 1; background: #000; border: 2px solid; border-radius: 12px; display: flex; align-items: center; gap: 15px; padding: 10px; }
+        .mega-pc img { height: 100px; width: 100px; object-fit: contain; object-position: bottom; }
+        .mega-pc-data { display: flex; flex-direction: column; }
+        .mvs-row { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
+        .mvs-lbl { width: 100px; font-size: 22px; font-weight: bold; text-align: right; }
+        .mvs-track { flex: 1; height: 50px; background: rgba(0,0,0,0.5); border-radius: 6px; position: relative; }
+        .mvs-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; transition: width 1s; }
+        .mvs-num { font-family: var(--font-en); font-size: 28px; }
+        .mega-swing-cols { display: flex; gap: 10px; flex: 1; justify-content: space-around; margin-top: 10px; }
+        .msc-col { flex: 1; background: rgba(0,0,0,0.5); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; align-items: center; border: 1px solid rgba(255,255,255,0.1); border-top: 4px solid; justify-content: center; }
+        
+        /* 5 STATES VERDICT */
+        .all5-grid { display: flex; gap: 15px; flex: 1; min-height: 0; align-items: stretch; justify-content: center; }
+        .all5-col { flex: 1; background: rgba(10,15,30,0.8); border: 2px solid rgba(0,212,255,0.3); border-radius: 15px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .all5-head { background: linear-gradient(180deg, rgba(0,212,255,0.2), transparent); padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .all5-st-name { font-size: 30px; font-weight: bold; color: var(--gold); line-height: 1; }
+        .all5-map-box { height: 160px; padding: 10px; display: flex; justify-content: center; align-items: center; background: rgba(0,0,0,0.4); border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .all5-map-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .all5-parties { padding: 10px; display: flex; flex-direction: column; z-index: 2; flex: 1; }
+        .all5-p-row { display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.7); padding: 6px 8px; border-radius: 6px; border-left: 5px solid; margin-bottom: 6px; position: relative; overflow: hidden; }
+        .all5-p-name { font-size: 18px; font-weight: bold; width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 2; }
+        .all5-p-seats { font-family: var(--font-en); font-size: 40px; line-height: 1; color: #fff; width: 40px; text-align: center; z-index: 2; }
+        .all5-p-vsbar-wrap { flex: 1; height: 25px; background: rgba(255,255,255,0.1); border-radius: 4px; display: flex; align-items: center; position: relative; z-index: 2; margin-left: 5px; overflow: hidden; }
+        .all5-p-vsfill { height: 100%; position: absolute; left: 0; top: 0; }
+        .all5-bottom-zone { position: relative; height: 500px; display: flex; flex-direction: column; align-items: center; }
+        .all5-hemi-box { width: 200%; height: 160px; position: relative; padding: -300px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+        .all5-hemi-lbl { font-family: var(--font-ui); font-size: 20px; color: var(--gold); background: rgba(0,0,0,0.8); padding: 2px 10px; border-radius: 5px; border: 1px solid var(--gold); position: absolute; bottom: 0; font-weight: bold; }
+        .all5-leader-img { position: absolute; bottom: 0; right: 25; height: 245px; object-fit: contain; object-position: bottom right; z-index: 5; filter: drop-shadow(-5px 5px 10px rgba(0,0,0,0.8)); }
+
+        /* LEADERBOARD (5 STATES) */
+        .leaderboard-grid { display: flex; gap: 25px; flex: 1; min-height: 0; align-items: stretch; justify-content: center; }
+        .lb-card { flex: 1; background: linear-gradient(180deg, rgba(20,30,45,0.9), #000); border: 3px solid; border-radius: 20px; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+        .lb-st-name { font-size: 36px; font-weight: 800; color: #fff; width: 100%; text-align: center; padding: 10px; background: rgba(0,0,0,0.6); z-index: 2; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .lb-magic { font-size: 16px; color: var(--gold); font-family: var(--font-ui); font-weight: bold; margin-top: -5px; }
+        .lb-party { font-size: 32px; font-weight: bold; text-align: center; padding: 10px; z-index: 2; background: rgba(255,255,255,0.05); }
+        .lb-img-box { flex: 1; display: flex; justify-content: center; align-items: flex-end; z-index: 2; position: relative; min-height: 0; }
+        .lb-img-box img { height: 100%; object-fit: contain; object-position: bottom; filter: drop-shadow(0 15px 15px #000); }
+        .lb-bottom { width: 100%; padding: 15px; background: rgba(0,0,0,0.85); text-align: center; z-index: 2; border-top: 2px solid rgba(255,255,255,0.1); }
+        .lb-seats { font-family: var(--font-en); font-size: 70px; line-height: 1; color: #fff; }
+
+        .loader { position: absolute; inset: 0; background: #000; z-index: 9999; display: flex; justify-content: center; align-items: center; font-family: var(--font-en); font-size: 40px; color: var(--cyan); transition: opacity 0.5s; }
+    </style>
+</head>
+<body>
+
+<div class="loader" id="loader">CONNECTING TO BROADCAST SERVER...</div>
+
+<div class="canvas-wrapper">
+    <div class="canvas" id="mainCanvas">
+        <div class="header" id="mainHeader">
+            <div class="header-left">
+                <h1>ELECTION VERDICT 2026</h1>
+                <h2 id="domSlideSubtitle">ಪಂಚ ತೀರ್ಪು · MEGA COVERAGE</h2>
+            </div>
+            <div class="state-badge"><span id="domStateName">STATE</span></div>
+        </div>
+
+        <div class="stage-wrapper">
+            <!-- 1. CURRENT RESULTS -->
+            <div class="slide slide-results" id="slide-results">
+                <div class="results-map-col">
+                    <div class="creative-totals"><div class="tech-box"><div class="tech-label">TOTAL SEATS</div><div class="tech-val" id="domTotalSeats">0</div></div><div class="tech-box maj"><div class="tech-label">MAJORITY</div><div class="tech-val" id="domMajority">0</div></div></div>
+                    <div class="map-frame"><img id="domMapFrame" class="map-img-element" src=""></div>
+                </div>
+                <div class="results-cards-col" id="domResultCards"></div>
+            </div>
+
+            <!-- 2. LAST ELECTION (2021) -->
+            <div class="slide slide-results" id="slide-lastelection">
+                <div class="results-map-col">
+                    <div class="creative-totals"><div class="tech-box"><div class="tech-label">YEAR</div><div class="tech-val">2021</div></div><div class="tech-box maj"><div class="tech-label">MAJORITY</div><div class="tech-val" id="domLastMajority">0</div></div></div>
+                    <div class="map-frame"><img id="domLastMapFrame" class="map-img-element" src="" style="filter:grayscale(30%);"></div>
+                </div>
+                <div class="results-cards-col" id="domLastResultCards"></div>
+            </div>
+
+            <!-- 3. POWER MAP (SWING) -->
+            <div class="slide" id="slide-powermap">
+                <div class="pm-side left"><div class="pm-year-badge">2021</div><div class="pm-map-box"><img id="pmMapPast" class="map-img-element" style="filter: grayscale(40%);"></div></div>
+                <div class="pm-center-console" id="pmSwingConsole"></div>
+                <div class="pm-side right"><div class="pm-year-badge">2026</div><div class="pm-map-box"><img id="pmMapCurr" class="map-img-element"></div></div>
+            </div>
+
+            <!-- 4. VOTE SHARE -->
+            <div class="slide" id="slide-voteshare">
+                <div class="slide-title">VOTE SHARE (%)</div>
+                <div class="vs-html-container" id="domVSHTMLBars"></div>
+            </div>
+
+            <!-- 5. HISTORICAL OVERLAY -->
+            <div class="slide" id="slide-history">
+                <div style="position: absolute; top: 10px; font-family: var(--font-en); font-size: 180px; opacity: 0.1;" id="histWatermark">2011</div>
+                <div class="hist-map-wrap"><img id="histBigMapFrame" class="map-img-element"></div>
+                <div class="hist-glass-overlay" id="histOverlayBox"></div>
+            </div>
+
+            <!-- 6. HEMICIRCLE -->
+            <div class="slide" id="slide-hemi">
+                <div class="hemi-canvas-box"><canvas id="hemiChart"></canvas><div class="hemi-center-text" id="hemiCenterNum"></div></div>
+                <div class="hemi-leaders-col" id="domHemiLeaders"></div>
+            </div>
+
+            <!-- 7. RACE TALLY -->
+            <div class="slide" id="slide-race">
+                <div class="slide-title">SEAT TALLY RACE - ಗೆಲುವಿನ ಓಟ</div>
+                <div class="race-track-container" id="domRaceTrack"></div>
+            </div>
+
+            <!-- 8. EXIT POLLS (TABLE) -->
+            <div class="slide" id="slide-exitpoll">
+                <div class="slide-title">EXIT POLLS - ಎಕ್ಸಿಟ್‌ ಪೋಲ್‌</div>
+                <table class="ep-table" id="domExitPollTable"></table>
+            </div>
+
+            <!-- 9. MEGA SUMMARY -->
+            <div class="slide" id="slide-megasummary">
+                <div class="mega-col" style="flex: 1.2;">
+                    <div class="mega-winner-box" id="megaWinnerBox"></div>
+                    <div class="mega-card" style="flex: 1; padding:0; display:flex; justify-content:center; align-items:center;"><img id="megaMap" class="map-img-element"></div>
+                </div>
+                <div class="mega-col" style="flex: 1.5;">
+                    <div class="mega-card" style="gap:15px; flex-direction: column; justify-content:center;" id="megaPartiesGrid"></div>
+                    <div class="mega-card" style="flex: 1.2;"><div class="mega-title">VOTE SHARE %</div><div id="megaVSHtml" style="flex:1; display:flex; flex-direction:column; justify-content:center;"></div></div>
+                </div>
+                <div class="mega-col" style="flex: 1.2;">
+                    <div class="mega-card" style="flex: 1.5; justify-content: flex-end; align-items: center; position:relative;"><canvas id="megaHemiChart"></canvas><div class="hemi-center-text" id="megaHemiCenterText" style="bottom:20px;"></div></div>
+                    <div class="mega-card" style="flex: 1;"><div class="mega-title">SWING (2021 vs 2026)</div><div class="mega-swing-cols" id="megaSwingCols"></div></div>
+                </div>
+            </div>
+
+            <!-- 10. 5 STATES VERDICT (MASTERPIECE) -->
+            <div class="slide" id="slide-5summary">
+                <div class="slide-title">5 STATES VERDICT · ಪಂಚ ತೀರ್ಪು</div>
+                <div class="all5-grid" id="domAll5Grid"></div>
+            </div>
+
+            <!-- 11. 5 STATE LEADERBOARD -->
+            <div class="slide" id="slide-5board">
+                <div class="slide-title">LEADERBOARD · ಗೆಲುವಿನ ಸರದಾರರು</div>
+                <div class="leaderboard-grid" id="domLeaderboard"></div>
+            </div>
+        </div>
+
+        <div class="brand-bottom-bar">
+            <div class="foot-hash" id="domBrandHashtag">#ELECTION2026</div>
+            <div class="foot-center">LIVE BROADCAST ENGINE</div>
+            <div class="foot-web" id="domBrandFooter">WWW.WEBSITE.COM</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- FIREBASE CONFIGURATION (REPLACE THIS WITH YOURS) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyD9xcMpjqQlyjpnsv2AXzlrepzinRH-XUI",
+      authDomain: "election-dashboard-4369d.firebaseapp.com",
+      databaseURL: "https://election-dashboard-4369d-default-rtdb.firebaseio.com",
+      projectId: "election-dashboard-4369d",
+      storageBucket: "election-dashboard-4369d.firebasestorage.app",
+      messagingSenderId: "227115898476",
+      appId: "1:227115898476:web:6f49670602f3f59bf6aa49"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // Resize logic
+    const wrapper = document.querySelector('.canvas-wrapper'), canvas = document.getElementById('mainCanvas');
+    function scaleCanvas() { canvas.style.transform = `scale(${Math.min(wrapper.clientWidth/1920, wrapper.clientHeight/1080)})`; }
+    window.addEventListener('resize', scaleCanvas); scaleCanvas();
+
+    let dbData = null, currentCmd = { state: 'TN', slide: 'slide-results', extra: '' };
+    let cHemi, cMegaHemi, all5Charts = [];
+    Chart.defaults.color = '#fff';
+
+    database.ref('electionData').on('value', snap => {
+        if(snap.exists()) { dbData = snap.val(); renderScreen(); }
+        document.getElementById('loader').style.opacity = '0';
+        setTimeout(() => document.getElementById('loader').style.display = 'none', 500);
+    });
+
+    database.ref('currentCmd').on('value', snap => {
+        if(snap.exists()) { currentCmd = snap.val(); renderScreen(); }
+    });
+
+    function getParties(st) { return (dbData.states[st]?.parties || []).filter(p => p.name.trim() !== ""); }
+    function getWinner(pts) { return pts.length ? pts.reduce((max, p) => p.seats > max.seats ? p : max, pts[0]) : null; }
+
+    function cleanupCharts() {
+        if(cHemi) cHemi.destroy();
+        if(cMegaHemi) cMegaHemi.destroy();
+        all5Charts.forEach(c => c.destroy()); all5Charts = [];
+    }
+
+    function renderScreen() {
+        if(!dbData) return;
+        cleanupCharts();
+        
+        let st = currentCmd.state, slide = currentCmd.slide, d = dbData.states[st];
+        let pts = getParties(st);
+        let maj = d.total ? Math.floor(d.total / 2) + 1 : 0;
+
+        document.getElementById('domStateName').innerText = d.name;
+        document.getElementById('domBrandHashtag').innerText = dbData.config.hashtag || "#ELECTION2026";
+        document.getElementById('domBrandFooter').innerText = dbData.config.website || "WWW.WEBSITE.COM";
+        
+        let globalSlides = ['slide-5summary', 'slide-5board'];
+        document.getElementById('mainHeader').style.display = globalSlides.includes(slide) ? 'none' : 'flex';
+        
+        let subMap = { 'slide-lastelection': "2021 ಫಲಿತಾಂಶ", 'slide-history': `${currentCmd.extra || '2011'} ಫಲಿತಾಂಶ` };
+        document.getElementById('domSlideSubtitle').innerText = subMap[slide] || "ಪಂಚ ತೀರ್ಪು · MEGA COVERAGE";
+
+        if(slide === 'slide-results') renderResults(pts, d, maj);
+        if(slide === 'slide-lastelection') renderLastElection(pts, d, maj);
+        if(slide === 'slide-powermap') renderPowerMap(pts, d);
+        if(slide === 'slide-voteshare') renderVoteShare(pts);
+        if(slide === 'slide-history') renderHistory(pts, d, currentCmd.extra);
+        if(slide === 'slide-hemi') renderHemicircle(pts, maj, 'hemiChart', 'hemiCenterNum', 'domHemiLeaders');
+        if(slide === 'slide-race') renderRace(pts, d.total, maj);
+        if(slide === 'slide-exitpoll') renderExitPoll(pts, d);
+        if(slide === 'slide-megasummary') renderMegaSummary(pts, d, maj);
+        if(slide === 'slide-5summary') render5Summary();
+        if(slide === 'slide-5board') render5Leaderboard();
+
+        document.querySelectorAll('.slide').forEach(s => { s.style.display = 'none'; s.classList.remove('active'); });
+        let target = document.getElementById(slide);
+        if(target) { void target.offsetWidth; target.style.display = 'flex'; target.classList.add('active'); }
+    }
+
+    function renderResults(pts, d, maj) {
+        document.getElementById('domTotalSeats').innerText = d.total; document.getElementById('domMajority').innerText = maj;
+        document.getElementById('domMapFrame').src = d.mapCurr || d.resultsMap || '';
+        document.getElementById('domResultCards').innerHTML = pts.map(p => `<div class="result-card" style="border-color:${p.col}"><div class="rc-head" style="background:${p.col}">${p.name}</div><div class="rc-img-box"><img src="${p.imgLeader||''}"></div><div class="rc-num-wrap"><div class="rc-num" style="color:${p.col}">${p.seats}</div></div></div>`).join('');
+    }
+
+    function renderLastElection(pts, d, maj) {
+        document.getElementById('domLastMajority').innerText = maj; 
+        document.getElementById('domLastMapFrame').src = d.map2021 || d.historyMap || '';
+        document.getElementById('domLastResultCards').innerHTML = pts.map(p => `<div class="result-card" style="border-color:${p.col}; filter:brightness(0.9);"><div class="rc-head" style="background:${p.col}">${p.name}</div><div class="rc-img-box"><img src="${p.imgLeader||''}" style="filter:grayscale(50%);"></div><div class="rc-num-wrap"><div class="rc-num" style="color:${p.col}">${p.s2021 || 0}</div></div></div>`).join('');
+    }
+
+    function renderPowerMap(pts, d) {
+        document.getElementById('pmMapCurr').src = d.mapCurr || d.resultsMap || ''; 
+        document.getElementById('pmMapPast').src = d.map2021 || d.historyMap || '';
+        document.getElementById('pmSwingConsole').innerHTML = pts.map(p => {
+            let diff = p.seats - (p.s2021||0), col = diff>0?'var(--green)':diff<0?'var(--red2)':'var(--silver)', str = diff>0?`+${diff}`:diff;
+            return `<div class="pm-swing-card" style="border-color:${p.col}60"><div style="color:${p.col}; font-size:24px; font-weight:bold;">${p.name}</div><div style="display:flex; justify-content:space-between; width:100%; align-items:center;"><div style="text-align:center;"><div style="font-size:14px; color:var(--silver);">2021</div><div style="font-family:var(--font-en); font-size:42px;">${p.s2021||0}</div></div><div style="font-family:var(--font-en); font-size:32px; color:${col}; background:rgba(0,0,0,0.5); padding:4px 10px; border-radius:6px;">${str}</div><div style="text-align:center;"><div style="font-size:14px; color:var(--silver);">2026</div><div style="font-family:var(--font-en); font-size:42px; color:${p.col};">${p.seats}</div></div></div></div>`;
+        }).join('');
+    }
+
+    function renderVoteShare(pts) {
+        let maxVS = Math.max(...pts.map(p => p.vs||0), 1);
+        document.getElementById('domVSHTMLBars').innerHTML = pts.map(p => `<div class="vs-col"><div class="vs-bar" style="height:${Math.max((p.vs/maxVS)*100, 30)}%; background:linear-gradient(180deg, ${p.col}, rgba(0,0,0,0.5)); border-color:${p.col};"><img src="${p.imgIcon||''}" class="vs-sq-img" style="border-color:${p.col};"><div class="vs-num" style="color:${p.col}">${p.vs||0}%</div></div><div class="vs-lbl" style="color:${p.col}">${p.name}</div></div>`).join('');
+    }
+
+    function renderHistory(pts, d, yearStr) {
+        let yr = yearStr || '2011';
+        document.getElementById('histWatermark').innerText = yr;
+        
+        // Dynamically get the map based on the requested year (Falls back securely)
+        let mapSrc = d['map'+yr] || (yr === '2021' ? d.historyMap : '') || d.mapCurr || d.resultsMap || '';
+        document.getElementById('histBigMapFrame').src = mapSrc; 
+
+        let listHtml = pts.map(p => `<div class="hist-list-item" style="border-left-color:${p.col}"><div style="font-size:24px; font-weight:bold; color:${p.col}">${p.name}</div><div style="font-family:var(--font-en); font-size:40px;">${p['s'+yr] || 0}</div></div>`).join('');
+        document.getElementById('histOverlayBox').innerHTML = `<div style="text-align:center; color:var(--cyan); font-size:22px; font-weight:bold; letter-spacing:3px; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:8px; margin-bottom:10px;">ಫಲಿತಾಂಶಗಳು</div>${listHtml}`;
+    }
+
+    function renderHemicircle(pts, maj, chartId, centerId, leadersId) {
+        cHemi = new Chart(document.getElementById(chartId).getContext('2d'), { type: 'doughnut', data: { labels: pts.map(p=>p.name), datasets:[{ data: pts.map(p=>p.seats), backgroundColor: pts.map(p=>p.col), borderWidth: 2, borderColor: '#000' }] }, options: { maintainAspectRatio: false, circumference: 180, rotation: -90, cutout: '50%', plugins: { legend: { display: false } }, animation: { duration: 800 } } });
+        document.getElementById(centerId).innerHTML = `<div class="hc-title">MAJORITY</div><div class="hc-num">${maj}</div>`;
+        if(leadersId) document.getElementById(leadersId).innerHTML = pts.map(p => `<div class="hemi-leader-row" style="border-left-color:${p.col}"><img src="${p.imgIcon||''}" style="border-color:${p.col}"><div style="flex:1;"><div class="hemi-leader-name" style="color:${p.col}">${p.name}</div><div class="hemi-leader-num">${p.seats}</div></div></div>`).join('');
+    }
+
+    function renderRace(pts, total, maj) {
+        let mPct = total ? (maj / total) * 100 : 0;
+        document.getElementById('domRaceTrack').innerHTML = `<div class="global-race-maj" style="left:${mPct}%"><div class="grm-lbl">MAJORITY</div></div>` + pts.map(p => `<div class="race-row"><div class="race-label" style="color:${p.col}">${p.name}</div><div class="race-bar-bg"><div class="race-bar-fill" id="rf_${p.id}" style="background:linear-gradient(90deg, ${p.col}60, ${p.col}); width:0%;"><div class="race-number">${p.seats}</div><img src="${p.imgIcon||''}" class="race-img" style="border-color:${p.col}"></div></div></div>`).join('');
+        setTimeout(() => pts.forEach(p => { let el = document.getElementById(`rf_${p.id}`); if(el) el.style.width = Math.min((p.seats/(total||1))*100, 95) + '%'; }), 50);
+    }
+
+    function renderExitPoll(pts, d) {
+        let agencies = d.exitPolls || [];
+        let headerHtml = `<tr><th>AGENCY</th>` + pts.map(p => `<th style="color:${p.col}">${p.name}</th>`).join('') + `</tr>`;
+        let rowsHtml = agencies.map(ag => {
+            let isPop = ag.name.toUpperCase() === 'POLL OF POLLS';
+            return `<tr class="${isPop ? 'poll-of-polls' : ''}"><td class="agency-col">${ag.name}</td>` + pts.map((p, i) => `<td style="color:${p.col}">${ag.vals[i] || 0}</td>`).join('') + `</tr>`;
+        }).join('');
+        document.getElementById('domExitPollTable').innerHTML = headerHtml + rowsHtml;
+    }
+
+    function renderMegaSummary(pts, d, maj) {
+        let winner = getWinner(pts);
+        if(!winner) return;
+        document.getElementById('megaMap').src = d.mapCurr || d.resultsMap || '';
+        document.getElementById('megaWinnerBox').innerHTML = `<img src="${winner.imgLeader||''}" class="mwb-img"><div class="mwb-data"><div class="mwb-title">WINNER</div><div class="mwb-party" style="color:${winner.col}">${winner.name}</div><div class="mwb-seats">${winner.seats}</div></div>`;
+        document.getElementById('megaWinnerBox').style.borderColor = winner.col;
+
+        let pcHtml1 = "", pcHtml2 = "";
+        pts.slice(0,4).forEach((p, i) => {
+            let s = `<div class="mega-pc" style="border-color:${p.col}"><img src="${p.imgIcon||''}"><div class="mega-pc-data"><div class="mega-pc-name" style="color:${p.col}; font-size:24px;">${p.name}</div><div class="mega-pc-seats" style="font-size:50px;">${p.seats}</div></div></div>`;
+            if(i<2) pcHtml1 += s; else pcHtml2 += s;
+        });
+        document.getElementById('megaPartiesGrid').innerHTML = `<div class="mega-pc-row">${pcHtml1}</div><div class="mega-pc-row">${pcHtml2}</div>`;
+
+        let maxVS = Math.max(...pts.map(p => p.vs||0), 1);
+        document.getElementById('megaVSHtml').innerHTML = pts.slice(0,4).map(p => `<div class="mvs-row"><div class="mvs-lbl" style="color:${p.col}">${p.name}</div><div class="mvs-track"><div class="mvs-fill" style="width:${Math.max((p.vs/maxVS)*100, 10)}%; background:${p.col};"><span class="mvs-num">${p.vs||0}%</span></div></div></div>`).join('');
+
+        cMegaHemi = new Chart(document.getElementById('megaHemiChart').getContext('2d'), { type: 'doughnut', data: { labels: pts.map(p=>p.name), datasets:[{ data: pts.map(p=>p.seats), backgroundColor: pts.map(p=>p.col), borderWidth: 2, borderColor: '#000' }] }, options: { maintainAspectRatio: false, circumference: 180, rotation: -90, cutout: '50%', plugins: { legend: { display: false } }, animation: false } });
+        document.getElementById('megaHemiCenterText').innerHTML = `<div class="hc-title" style="font-size:20px; padding:2px 10px;">MAJORITY</div><div class="hc-num" style="font-size:80px;">${maj}</div>`;
+
+        document.getElementById('megaSwingCols').innerHTML = pts.slice(0,4).map(p => {
+            let diff = p.seats - (p.s2021||0), colArrow = diff>0?'var(--green)':diff<0?'var(--red2)':'var(--silver)', arrow = diff>0?'▲':diff<0?'▼':'=';
+            return `<div class="msc-col" style="border-top-color:${p.col}"><div style="font-weight:bold; color:${p.col}">${p.name}</div><div style="font-size:12px; color:var(--silver);">PAST: ${p.s2021||0}</div><div style="font-family:var(--font-en); font-size:30px; color:${colArrow}">${arrow} ${Math.abs(diff)}</div></div>`;
+        }).join('');
+    }
+
+    function render5Summary() {
+        let html = "";
+        ['TN','WB','AS','KL','PY'].forEach(st => {
+            let d = dbData.states[st], pts = getParties(st), winner = getWinner(pts);
+            if(!d || !winner) return;
+            let maxVS = Math.max(...pts.map(p => p.vs||0), 1);
+            let pList = pts.slice(0,4).map(p => {
+                let diff = p.seats - (p.s2021||0), sCol = diff>0?'var(--green)':diff<0?'var(--red2)':'var(--silver)', sStr = diff>0?`+${diff}`:diff;
+                return `<div class="all5-p-row" style="border-left-color:${p.col}"><div class="all5-p-name" style="color:${p.col}">${p.name}</div><div class="all5-p-seats">${p.seats}</div><div class="all5-p-vsbar-wrap"><div class="all5-p-vsfill" style="width:${(p.vs/maxVS)*100}%; background:${p.col};"></div></div></div>`;
+            }).join('');
+            
+            html += `<div class="all5-col" style="border-top: 6px solid ${winner.col};"><div class="all5-head"><div class="all5-st-name">${d.name}</div></div><div class="all5-map-box"><img src="${d.mapCurr||d.resultsMap||''}"></div><div class="all5-parties">${pList}</div><div class="all5-bottom-zone"><div class="all5-hemi-box"><canvas id="all5Hemi_${st}"></canvas></div><img src="${winner.imgLeader||''}" class="all5-leader-img"></div></div>`;
+        });
+        document.getElementById('domAll5Grid').innerHTML = html;
+
+        setTimeout(() => {
+            ['TN','WB','AS','KL','PY'].forEach(st => {
+                let ctx = document.getElementById(`all5Hemi_${st}`);
+                if(ctx) { let pts = getParties(st); all5Charts.push(new Chart(ctx.getContext('2d'), { type: 'doughnut', data: { labels: pts.map(p=>p.name), datasets:[{ data: pts.map(p=>p.seats), backgroundColor: pts.map(p=>p.col), borderWidth: 1, borderColor: '#000' }] }, options: { maintainAspectRatio: false, circumference: 180, rotation: -90, cutout: '50%', plugins: { legend: { display: false } }, animation: false } })); }
+            });
+        }, 50);
+    }
+
+    function render5Leaderboard() {
+        let html = "";
+        ['TN','WB','AS','KL','PY'].forEach(st => {
+            let d = dbData.states[st], pts = getParties(st), winner = getWinner(pts);
+            if(d && winner) {
+                let maj = d.total ? Math.floor(d.total / 2) + 1 : 0;
+                html += `<div class="lb-card" style="border-bottom: 8px solid ${winner.col};"><div class="lb-st-name">${d.name}<div class="lb-magic">MAGIC: ${maj}</div></div><div class="lb-party" style="color:${winner.col}">${winner.name}</div><div class="lb-img-box"><img src="${winner.imgLeader||''}"></div><div class="lb-bottom"><div class="lb-seats">${winner.seats} <span style="font-size:36px; color:var(--silver);">/ ${d.total}</span></div></div></div>`;
+            }
+        });
+        document.getElementById('domLeaderboard').innerHTML = html;
+    }
+</script>
+</body>
+</html>
