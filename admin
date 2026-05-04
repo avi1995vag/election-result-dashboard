@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MASTER ADMIN - ELECTION ENGINE</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <style>
+        body { background: #070f22; color: #fff; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        .sidebar { width: 380px; background: #040812; border-right: 2px solid #00d4ff; padding: 20px; overflow-y: auto; }
+        .main { flex: 1; padding: 20px; overflow-y: auto; }
+        h2 { color: #00d4ff; border-bottom: 1px solid rgba(0,212,255,0.3); padding-bottom: 10px; margin-bottom: 15px;}
+        .card { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.1); }
+        label { display: block; font-size: 11px; color: #94a3b8; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; }
+        input, select { width: 100%; padding: 8px; background: #111; border: 1px solid #444; color: #fff; border-radius: 4px; margin-bottom: 10px; box-sizing: border-box; }
+        button { background: #00d4ff; color: #000; padding: 10px 15px; border: none; font-weight: bold; border-radius: 4px; cursor: pointer; width: 100%; margin-bottom: 5px; text-transform: uppercase; }
+        button:hover { filter: brightness(1.2); }
+        .btn-red { background: #e74c3c; color: #fff; }
+        .btn-green { background: #00c853; color: #000; }
+        .flex-row { display: flex; gap: 10px; align-items: center; }
+        .party-row { border-left: 4px solid #fff; padding-left: 10px; margin-bottom: 15px; background: #0a101f; padding: 15px; border-radius: 4px; }
+        .status-box { padding: 15px; background: #1a56db; border-radius: 8px; text-align: center; margin-bottom: 20px; font-weight: bold; font-size: 16px; }
+        .status-box span { color: #f5c842; font-size: 22px; display: block; margin-top: 5px; }
+        
+        .chk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 15px; }
+        .chk-wrap { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: bold; background: #111; padding: 6px; border-radius: 4px; border: 1px solid #333; cursor: pointer;}
+        .chk-wrap input { width: auto; margin: 0; cursor: pointer;}
+        
+        /* New highly visible historical entry box */
+        .history-box { background: rgba(0,0,0,0.4); padding: 10px; border-radius: 6px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.1); }
+        .history-label { font-size: 10px; color: #f5c842; font-weight: bold; margin-bottom: 5px; display: block; letter-spacing: 1px;}
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>📡 MASTER CONTROLS</h2>
+    
+    <div class="status-box">
+        LIVE ON BROADCAST
+        <span id="lblLiveState">--</span>
+        <span id="lblLiveSlide" style="font-size: 14px; color: #fff;">--</span>
+    </div>
+
+    <div class="card">
+        <label>MANUAL OVERRIDE</label>
+        <select id="selForceState">
+            <option value="TN">Tamil Nadu</option><option value="WB">West Bengal</option>
+            <option value="AS">Assam</option><option value="KL">Kerala</option><option value="PY">Puducherry</option>
+        </select>
+        <select id="selForceSlide">
+            <option value="slide-results">1. Current Results</option>
+            <option value="slide-lastelection">2. 2021 Results Compare</option>
+            <option value="slide-history|2021">3. 2021 Historical Map</option>
+            <option value="slide-history|2016">4. 2016 Historical Map</option>
+            <option value="slide-history|2011">5. 2011 Historical Map</option>
+            <option value="slide-powermap">6. Power Map (Swing)</option>
+            <option value="slide-voteshare">7. Vote Share (%)</option>
+            <option value="slide-hemi">8. Hemicircle</option>
+            <option value="slide-race">9. Tally Race</option>
+            <option value="slide-exitpoll">10. Exit Poll</option>
+            <option value="slide-megasummary">11. Mega Summary (1 State)</option>
+            <option value="slide-5summary">12. 5 States Verdict (Global)</option>
+            <option value="slide-5board">13. Leaderboard (Global)</option>
+        </select>
+        <button onclick="forceRemote()">🚀 PUSH TO LIVE</button>
+    </div>
+
+    <div class="card">
+        <label>AUTO ROTATION CLOCK (5 Sec)</label>
+        <div class="chk-grid" id="rotationCheckboxes">
+            <label class="chk-wrap"><input type="checkbox" class="chk-rot" value="slide-results" checked> Results</label>
+            <label class="chk-wrap"><input type="checkbox" class="chk-rot" value="slide-lastelection" checked> 2021 Results</label>
+            <label class="chk-wrap"><input type="checkbox" class="chk-rot" value="slide-history|2021" checked> 2021 Map</label>
+            <label class="chk-wrap"><input type="checkbox" class="chk-rot" value="slide-history|2016" checked> 2016 Map</label>
+            <label class="chk-wrap"><input type="checkbox" class="chk-rot" value="slide-history|2011" checked> 2011 Map</label>
+            <label class="chk-wrap"><input type="checkbox" class="chk-rot" value="slide-powermap"> Power Swing</label>
+            <label class="chk-wrap"><input type="checkbox" class="chk-rot" value="slide-voteshare"> Vote Share</label>
+            <label class="chk-wrap"><input type="checkbox" class="chk-rot" value="slide-hemi"> Hemicircle</label>
+            <label class="chk-wrap"><input type="checkbox" class="chk-rot" value="slide-race" checked> Tally Race</label>
+            <label class="chk-wrap"><input type="checkbox" class="chk-rot" value="slide-exitpoll"> Exit Poll</label>
+            <label class="chk-wrap"><input type="checkbox" class="chk-rot" value="slide-megasummary" checked> Mega Summary</label>
+            <label class="chk-wrap"><input type="checkbox" class="chk-rot" value="slide-5summary" checked> 5 Verdict</label>
+            <label class="chk-wrap" style="grid-column: span 2;"><input type="checkbox" class="chk-rot" value="slide-5board" checked> 5 Leaderboard</label>
+        </div>
+        <button id="btnAutoToggle" class="btn-green" onclick="toggleAutoRotation()">START AUTO ROTATION</button>
+    </div>
+</div>
+
+<div class="main">
+    <h2>🛠️ DATA ENTRY PANEL</h2>
+    <div class="card flex-row" style="background:#111;">
+        <select id="editorState" onchange="loadEditorData()" style="margin:0; flex:1;">
+            <option value="TN">Tamil Nadu</option><option value="WB">West Bengal</option>
+            <option value="AS">Assam</option><option value="KL">Kerala</option><option value="PY">Puducherry</option>
+        </select>
+        <button onclick="saveEditorData()" style="width:200px; margin:0;">💾 SAVE STATE DATA</button>
+    </div>
+
+    <div style="display:flex; gap:20px;">
+        <div style="flex:1;">
+            <div class="card" id="partyEditorBox"></div>
+        </div>
+        <div style="flex:1;">
+            <div class="card" id="mapUploadBox"></div>
+            <div class="card" id="exitPollEditorBox"></div>
+            <div class="card">
+                <label>GLOBAL SETTINGS</label>
+                <input type="text" id="cfgHash" placeholder="#ELECTION2026">
+                <input type="text" id="cfgWeb" placeholder="WWW.VIJAYKARNATAKA.COM">
+                <button onclick="saveGlobal()">SAVE GLOBALS</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyD9xcMpjqQlyjpnsv2AXzlrepzinRH-XUI",
+      authDomain: "election-dashboard-4369d.firebaseapp.com",
+      databaseURL: "https://election-dashboard-4369d-default-rtdb.firebaseio.com",
+      projectId: "election-dashboard-4369d",
+      storageBucket: "election-dashboard-4369d.firebasestorage.app",
+      messagingSenderId: "227115898476",
+      appId: "1:227115898476:web:6f49670602f3f59bf6aa49"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // Base Database Setup Structure
+    let defaultDb = {
+        config: { hashtag: "#ELECTION2026", website: "WWW.VIJAYKARNATAKA.COM" },
+        states: {
+            TN: { name:"ತಮಿಳುನಾಡು", total:234, mapCurr:"", map2021:"", map2016:"", map2011:"", parties:[
+                {id:"p1",name:"ಡಿಎಂಕೆ+",col:"#cc0000",seats:159,s2021:159,s2016:98,s2011:31,vs:45,imgLeader:"",imgIcon:""},
+                {id:"p2",name:"ಎಐಎಡಿಎಂಕೆ+",col:"#009933",seats:75,s2021:75,s2016:134,s2011:203,vs:33,imgLeader:"",imgIcon:""},
+                {id:"p3",name:"ಎನ್‌ಡಿಎ",col:"#ff9900",seats:0,s2021:0,s2016:0,s2011:0,vs:10,imgLeader:"",imgIcon:""},
+                {id:"p4",name:"ಇತರೆ",col:"#808080",seats:0,s2021:0,s2016:2,s2011:0,vs:12,imgLeader:"",imgIcon:""}
+            ], exitPolls: [ {name:"Axis My India", vals:[155,70,9,0]}, {name:"POLL OF POLLS", vals:[155,70,9,0]} ]},
+            WB: { name:"ಪಶ್ಚಿಮ ಬಂಗಾಳ", total:294, mapCurr:"", map2021:"", map2016:"", map2011:"", parties:[
+                {id:"p1",name:"ಟಿಎಂಸಿ+",col:"#20c997",seats:215,s2021:215,s2016:211,s2011:226,vs:48,imgLeader:"",imgIcon:""},
+                {id:"p2",name:"ಎನ್‌ಡಿಎ",col:"#ff9900",seats:77,s2021:77,s2016:3,s2011:0,vs:38,imgLeader:"",imgIcon:""},
+                {id:"p3",name:"ಎಡರಂಗ+",col:"#d32f2f",seats:0,s2021:0,s2016:76,s2011:62,vs:10,imgLeader:"",imgIcon:""},
+                {id:"p4",name:"ಇತರೆ",col:"#808080",seats:2,s2021:2,s2016:4,s2011:6,vs:4,imgLeader:"",imgIcon:""}
+            ], exitPolls: [ {name:"Axis My India", vals:[190,95,9,0]}, {name:"POLL OF POLLS", vals:[195,90,9,0]} ]},
+            AS: { name:"ಅಸ್ಸಾಂ", total:126, mapCurr:"", map2021:"", map2016:"", map2011:"", parties:[
+                {id:"p1",name:"ಎನ್‌ಡಿಎ",col:"#ff9900",seats:75,s2021:75,s2016:86,s2011:5,vs:52,imgLeader:"",imgIcon:""},
+                {id:"p2",name:"ಇಂಡಿಯಾ",col:"#005ce6",seats:50,s2021:50,s2016:26,s2011:78,vs:42,imgLeader:"",imgIcon:""},
+                {id:"p3",name:"ಇತರೆ",col:"#808080",seats:1,s2021:1,s2016:14,s2011:43,vs:6,imgLeader:"",imgIcon:""}
+            ], exitPolls: [ {name:"POLL OF POLLS", vals:[78,45,3]} ]},
+            KL: { name:"ಕೇರಳ", total:140, mapCurr:"", map2021:"", map2016:"", map2011:"", parties:[
+                {id:"p1",name:"ಎಲ್ಡಿಎಫ್",col:"#d32f2f",seats:99,s2021:99,s2016:91,s2011:68,vs:45,imgLeader:"",imgIcon:""},
+                {id:"p2",name:"ಯುಡಿಎಫ್",col:"#005ce6",seats:41,s2021:41,s2016:47,s2011:72,vs:40,imgLeader:"",imgIcon:""},
+                {id:"p3",name:"ಎನ್‌ಡಿಎ",col:"#ff9900",seats:0,s2021:0,s2016:1,s2011:0,vs:12,imgLeader:"",imgIcon:""}
+            ], exitPolls: [ {name:"POLL OF POLLS", vals:[70,68,2]} ]},
+            PY: { name:"ಪುದುಚೇರಿ", total:30, mapCurr:"", map2021:"", map2016:"", map2011:"", parties:[
+                {id:"p1",name:"ಎನ್‌ಡಿಎ",col:"#ff9900",seats:16,s2021:16,s2016:4,s2011:0,vs:48,imgLeader:"",imgIcon:""},
+                {id:"p2",name:"ಇಂಡಿಯಾ",col:"#005ce6",seats:14,s2021:14,s2016:25,s2011:15,vs:44,imgLeader:"",imgIcon:""},
+                {id:"p3",name:"ಇತರೆ",col:"#808080",seats:0,s2021:0,s2016:1,s2011:15,vs:8,imgLeader:"",imgIcon:""}
+            ], exitPolls: [ {name:"POLL OF POLLS", vals:[17,13,0]} ]}
+        }
+    };
+
+    let localDb = null;
+    database.ref('electionData').once('value').then(snap => {
+        if(!snap.exists()) { database.ref('electionData').set(defaultDb); localDb = JSON.parse(JSON.stringify(defaultDb)); }
+        else { localDb = snap.val(); }
+        document.getElementById('cfgHash').value = localDb.config.hashtag || "#ELECTION2026"; 
+        document.getElementById('cfgWeb').value = localDb.config.website || "WWW.WEBSITE.COM";
+        loadEditorData();
+    });
+
+    database.ref('currentCmd').on('value', snap => {
+        if(snap.exists()) {
+            let cmd = snap.val();
+            document.getElementById('lblLiveState').innerText = cmd.state;
+            document.getElementById('lblLiveSlide').innerText = cmd.slide.replace('slide-', '').toUpperCase() + (cmd.extra ? ' '+cmd.extra : '');
+        }
+    });
+
+    function saveGlobal() {
+        localDb.config.hashtag = document.getElementById('cfgHash').value;
+        localDb.config.website = document.getElementById('cfgWeb').value;
+        database.ref('electionData/config').set(localDb.config);
+        alert("Globals Saved!");
+    }
+
+    function loadEditorData() {
+        if(!localDb) return;
+        let st = document.getElementById('editorState').value, d = localDb.states[st];
+        
+        // 4 Maps Load Block
+        document.getElementById('mapUploadBox').innerHTML = `
+            <label>STATE MAPS UPLOAD</label>
+            <div class="flex-row">
+                <input type="text" id="mapCurr" value="${d.mapCurr || d.resultsMap || ''}" placeholder="2026 MAP URL/B64" style="flex:1;">
+                <input type="file" onchange="handleImage(event, 'mapCurr')" style="width:100px; font-size:10px;">
+            </div>
+            <div class="flex-row">
+                <input type="text" id="map2021" value="${d.map2021 || d.historyMap || ''}" placeholder="2021 MAP URL/B64" style="flex:1;">
+                <input type="file" onchange="handleImage(event, 'map2021')" style="width:100px; font-size:10px;">
+            </div>
+            <div class="flex-row">
+                <input type="text" id="map2016" value="${d.map2016 || ''}" placeholder="2016 MAP URL/B64" style="flex:1;">
+                <input type="file" onchange="handleImage(event, 'map2016')" style="width:100px; font-size:10px;">
+            </div>
+            <div class="flex-row">
+                <input type="text" id="map2011" value="${d.map2011 || ''}" placeholder="2011 MAP URL/B64" style="flex:1;">
+                <input type="file" onchange="handleImage(event, 'map2011')" style="width:100px; font-size:10px;">
+            </div>
+        `;
+
+        let pHTML = `<label>PARTY DATA SETUP</label>`;
+        d.parties.forEach((p, i) => {
+            pHTML += `<div class="party-row" style="border-color:${p.col}">
+                
+                <div class="flex-row">
+                    <input type="text" id="p_name_${i}" value="${p.name}" placeholder="Party Name" style="flex:1.5;">
+                    <input type="color" id="p_col_${i}" value="${p.col}" style="width:50px; padding:0;">
+                    <input type="number" id="p_seats_${i}" value="${p.seats}" title="Current Seats (2026)" placeholder="2026 Seats">
+                    <input type="number" id="p_vs_${i}" value="${p.vs}" title="Vote Share %" placeholder="VS %">
+                </div>
+                
+                <!-- BRAND NEW HISTORICAL SEATS ENTRY -->
+                <div class="history-box">
+                    <span class="history-label">PAST ELECTION SEATS:</span>
+                    <div class="flex-row">
+                        <input type="number" id="p_s2021_${i}" value="${p.s2021}" title="2021 Seats" placeholder="2021 Seats">
+                        <input type="number" id="p_s2016_${i}" value="${p.s2016||0}" title="2016 Seats" placeholder="2016 Seats">
+                        <input type="number" id="p_s2011_${i}" value="${p.s2011||0}" title="2011 Seats" placeholder="2011 Seats">
+                    </div>
+                </div>
+
+                <div class="flex-row" style="font-size:10px;">
+                    <input type="text" id="p_ldr_${i}" value="${p.imgLeader||''}" placeholder="Leader Image URL/B64">
+                    <input type="file" onchange="handleImage(event, 'p_ldr_${i}')" style="width:80px;">
+                    <input type="text" id="p_icn_${i}" value="${p.imgIcon||''}" placeholder="Icon URL/B64">
+                    <input type="file" onchange="handleImage(event, 'p_icn_${i}')" style="width:80px;">
+                </div>
+            </div>`;
+        });
+        document.getElementById('partyEditorBox').innerHTML = pHTML;
+
+        let epHTML = "<label>EXIT POLLS (7 max, last = POLL OF POLLS)</label>";
+        for(let j=0; j<7; j++) {
+            let ep = (d.exitPolls && d.exitPolls[j]) ? d.exitPolls[j] : {name:"", vals:[]};
+            let valInputs = d.parties.map((p, k) => `<input type="number" id="ep_val_${j}_${k}" value="${ep.vals[k]||0}" style="width:40px;" title="${p.name}">`).join('');
+            epHTML += `<div class="flex-row" style="margin-bottom:5px;"><input type="text" id="ep_name_${j}" value="${ep.name}" placeholder="Agency Name">${valInputs}</div>`;
+        }
+        document.getElementById('exitPollEditorBox').innerHTML = epHTML;
+    }
+
+    function saveEditorData() {
+        let st = document.getElementById('editorState').value, d = localDb.states[st];
+        
+        d.mapCurr = document.getElementById('mapCurr').value; 
+        d.map2021 = document.getElementById('map2021').value;
+        d.map2016 = document.getElementById('map2016').value;
+        d.map2011 = document.getElementById('map2011').value;
+
+        // Clean up old keys
+        delete d.resultsMap; delete d.historyMap;
+
+        d.parties.forEach((p, i) => {
+            p.name = document.getElementById(`p_name_${i}`).value; p.col = document.getElementById(`p_col_${i}`).value;
+            p.seats = parseInt(document.getElementById(`p_seats_${i}`).value) || 0;
+            p.s2021 = parseInt(document.getElementById(`p_s2021_${i}`).value) || 0;
+            p.s2016 = parseInt(document.getElementById(`p_s2016_${i}`).value) || 0;
+            p.s2011 = parseInt(document.getElementById(`p_s2011_${i}`).value) || 0;
+            p.vs = parseInt(document.getElementById(`p_vs_${i}`).value) || 0;
+            p.imgLeader = document.getElementById(`p_ldr_${i}`).value; p.imgIcon = document.getElementById(`p_icn_${i}`).value;
+        });
+
+        d.exitPolls = [];
+        for(let j=0; j<7; j++) {
+            let n = document.getElementById(`ep_name_${j}`).value;
+            if(n.trim() !== "") {
+                let v = d.parties.map((p, k) => parseInt(document.getElementById(`ep_val_${j}_${k}`).value) || 0);
+                d.exitPolls.push({name: n, vals: v});
+            }
+        }
+        database.ref('electionData/states/' + st).set(d).then(()=>alert("State Saved!"));
+    }
+
+    function handleImage(e, targetId) {
+        if(!e.target.files[0]) return;
+        const r = new FileReader(); r.onload = ev => { document.getElementById(targetId).value = ev.target.result; };
+        r.readAsDataURL(e.target.files[0]);
+    }
+
+    // --- BROADCAST CONTROL (MANUAL & SMART AUTO) ---
+    function forceRemote() {
+        let st = document.getElementById('selForceState').value;
+        let slRaw = document.getElementById('selForceSlide').value.split('|');
+        database.ref('currentCmd').set({ state: st, slide: slRaw[0], extra: slRaw[1]||'' });
+    }
+
+    let rotTimer = null, rotRunning = false;
+    let statesArr = ['TN', 'WB', 'AS', 'KL', 'PY'];
+    let stIdx = 0, slIdx = 0;
+
+    function toggleAutoRotation() {
+        let btn = document.getElementById('btnAutoToggle');
+        if(rotRunning) {
+            clearInterval(rotTimer); rotRunning = false;
+            btn.innerText = "START AUTO ROTATION"; btn.className = "btn-green";
+        } else {
+            rotRunning = true; btn.innerText = "🛑 STOP AUTO ROTATION"; btn.className = "btn-red";
+            
+            // Start from the Beginning everytime Start is pressed.
+            stIdx = 0; // State: Tamil Nadu
+            slIdx = 0; // First Selected Slide Index
+            
+            advanceRotation();
+            rotTimer = setInterval(advanceRotation, 5000); // 5 Seconds exactly
+        }
+    }
+
+    function advanceRotation() {
+        let allowedSlides = Array.from(document.querySelectorAll('.chk-rot:checked')).map(el => el.value);
+        if(allowedSlides.length === 0) return;
+
+        // Clean bounds if unchecked mid-rotation
+        if(slIdx >= allowedSlides.length) slIdx = 0;
+        
+        let rawVal = allowedSlides[slIdx].split('|');
+        let activeSlide = rawVal[0];
+        let activeExtra = rawVal[1] || '';
+        let activeState = statesArr[stIdx];
+
+        let isGlobal = ['slide-5summary', 'slide-5board'].includes(activeSlide);
+        database.ref('currentCmd').set({ state: activeState, slide: activeSlide, extra: activeExtra });
+
+        if(isGlobal) {
+            // Skip rotating states for global slides
+            stIdx = 0; slIdx++;
+            if(slIdx >= allowedSlides.length) slIdx = 0;
+        } else {
+            stIdx++;
+            if(stIdx >= statesArr.length) {
+                stIdx = 0; slIdx++;
+                if(slIdx >= allowedSlides.length) slIdx = 0;
+            }
+        }
+    }
+</script>
+</body>
+</html>
